@@ -87,6 +87,10 @@ class QLearningAgent:
         )
         if len(self.D) == N:
             self.D.pop(0)
+
+        if value != 0:
+            for i in range(30):
+                self.D.append(experience)
         self.D.append(experience)
 
     def get_value(self, state: State) -> float:

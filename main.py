@@ -27,7 +27,7 @@ model = DQN(num_actions=n_actions)
 # You can edit these hyperparameters!
 agent = QLearningAgent(
     learning_rate=1.0,
-    epsilon=0.6,
+    epsilon=0.25,
     gamma=0.99,
     legal_actions=list(range(n_actions)),
     model=model,
@@ -73,10 +73,13 @@ def play_and_train(env: gym.Env, agent: QLearningAgent, t_max=int(1e4)) -> float
 
 qlearning_rewards = []
 
-M = 1000
+M = 10000
 for i in range(M):
-    if i % 100 == 0:
+    if i % 10 == 0:
         env1 = env  # HumanRendering(env)
+        print(
+            f"Sum of non zero transitions: {sum(1 for (_, _, r, _, _) in agent.D if r != 0)}"
+        )
     else:
         env1 = env
     qlearning_rewards.append(play_and_train(env1, agent, t_max=1000))
