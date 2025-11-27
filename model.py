@@ -37,4 +37,4 @@ transform = T.Compose(
 def preprocess(state: np.ndarray) -> np.ndarray:
     """Convert RGB frame to 84x84 grayscale tensor."""
     tensor = transform(state)
-    return tensor.numpy()  # Convert back to NumPy array if needed
+    return tensor.numpy()[0]  # Convert back to NumPy array if needed

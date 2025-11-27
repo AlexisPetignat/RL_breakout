@@ -5,12 +5,22 @@ import numpy as np
 import ale_py
 from qlearning import QLearningAgent
 from model import DQN, preprocess
+from upscaler import UpscaleRender
 
 
-env = gym.make("ALE/Pong-v5", render_mode="rgb_array", repeat_action_probability=0.0)
+env = gym.make(
+    "ALE/Breakout-v5", render_mode="rgb_array", repeat_action_probability=0.0
+)
+env = UpscaleRender(env, scale=3)
 
 n_actions = env.action_space.n  # type: ignore
 recording_epoch = 250
+TARGET_UPDATE_INTERVAL = 10000
+FRAME_BETWEEN_TRAIN = 3
+
+# Counters
+qlearning_rewards = []
+total_frames = 0
 
 # env = RecordVideo(
 #    env,
@@ -26,16 +36,21 @@ model = DQN(num_actions=n_actions)
 
 # You can edit these hyperparameters!
 agent = QLearningAgent(
-    learning_rate=1.0,
-    epsilon=0.25,
+    learning_rate=0.00025,
+    epsilon=1.0,
+    decay=30000,
+    epsilon_min=0.05,
     gamma=0.99,
     legal_actions=list(range(n_actions)),
     model=model,
-    batch_size=32,
+    batch_size=128,
+    retrain=True,
 )
 
 
-def play_and_train(env: gym.Env, agent: QLearningAgent, t_max=int(1e4)) -> float:
+def play_and_train(
+    env: gym.Env, agent: QLearningAgent, t_max=int(1e4)
+) -> tuple[float, int]:
     """
     This function should
     - run a full game, actions given by agent.getAction(s)
@@ -43,15 +58,20 @@ def play_and_train(env: gym.Env, agent: QLearningAgent, t_max=int(1e4)) -> float
     - return total rewardb
     """
     total_reward: t.SupportsFloat = 0.0
-    s, _ = env.reset()
 
     # State at start of the game
+    s, _ = env.reset()
+    agent.initializeBuffer(s)
+    agent.updateEpsilon()
 
     for epoch in range(t_max):
         # Get agent to pick action given state s
         a = agent.get_action()
 
         next_s, r, done, _, _ = env.step(a)
+
+        # Clip reward just in case
+        r = np.clip(r, -1, 1)
 
         # Train agent for state s
         # BEGIN SOLUTION
@@ -60,29 +80,35 @@ def play_and_train(env: gym.Env, agent: QLearningAgent, t_max=int(1e4)) -> float
         agent.update(s, a, r, next_s, done)
 
         # Train only sometimes
-        if epoch % 10 == 0:
-            agent.thinkAboutWhatHappened()
+        if epoch % FRAME_BETWEEN_TRAIN == 0:
+            agent.thinkAboutWhatHappened(
+                update=(total_frames + epoch) % TARGET_UPDATE_INTERVAL == 0
+            )
         if done:
-            break
+            return (total_reward, epoch)
 
         s = next_s
         # END SOLUTION
 
-    return total_reward
+    return (total_reward, t_max)
 
 
-qlearning_rewards = []
-
-M = 10000
+M = 90000
 for i in range(M):
-    if i % 10 == 0:
-        env1 = env  # HumanRendering(env)
-        print(
-            f"Sum of non zero transitions: {sum(1 for (_, _, r, _, _) in agent.D if r != 0)}"
-        )
+    if i % 1000 == 999:
+        env1 = HumanRendering(env)
     else:
         env1 = env
-    qlearning_rewards.append(play_and_train(env1, agent, t_max=1000))
+
+    # Train
+    reward, frames = play_and_train(env1, agent)
+
+    # Update counters
+    qlearning_rewards.append(reward)
+    total_frames += frames
     print(f"Epoch {i}: mean reward", np.mean(qlearning_rewards[-100:]))
+    if i % 10 == 0:
+        print(f"Total frames: {total_frames}")
+        print(f"Epsilon: {agent.epsilon}")
 
 assert np.mean(qlearning_rewards[-100:]) > 0.0
