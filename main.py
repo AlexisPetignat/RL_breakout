@@ -7,6 +7,8 @@ from qlearning import QLearningAgent
 from model import DQN, preprocess
 from upscaler import UpscaleRender
 
+DISPLAY = False
+
 
 env = gym.make(
     "ALE/Breakout-v5", render_mode="rgb_array", repeat_action_probability=0.0
@@ -95,7 +97,7 @@ def play_and_train(
 
 M = 90000
 for i in range(M):
-    if i % 1000 == -1 or True:
+    if i % 1000 == -1  or DISPLAY:
         env1 = HumanRendering(env)
     else:
         env1 = env
