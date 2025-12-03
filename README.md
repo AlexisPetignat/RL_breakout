@@ -4,5 +4,4 @@ This, project, although the name of the repo is Pong, is focused on developing a
 
 The project can be executed by running the main.py file.
 
-Link of the video: 
-[![Watch the video](https://i.sstatic.net/Vp2cE.png)](https://drive.google.com/file/d/1K3dD1GkpMwWkm4ET8TES6Qsd9PKrr6fI/view?usp=sharing)
+[![Watch the video]](https://drive.google.com/file/d/1K3dD1GkpMwWkm4ET8TES6Qsd9PKrr6fI/view?usp=sharing)
