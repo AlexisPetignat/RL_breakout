@@ -229,14 +229,26 @@ class QLearningAgent:
 
         # Predict Q-values for current and next states
         q_pred = self.model(states)
-        q_next = self.target_model(next_states).detach()
 
         # Select Q-values for chosen actions
         q_pred_action = q_pred.gather(1, actions)
 
-        # Compute target: y_j = r + gamma * max_a' Q(s', a') (only if not done)
-        max_next_q = q_next.max(1)[0].unsqueeze(1)
-        y_j = rewards + self.gamma * (1 - dones) * max_next_q
+        # q_next = self.target_model(next_states).detach()
+        # max_next_q = q_next.max(1)[0].unsqueeze(1)
+        # y_j = rewards + self.gamma * (1 - dones) * max_next_q
+
+        # --- Double DQN target computation ---
+
+        # 1) Online network chooses the best actions
+        q_next_online = self.model(next_states).detach()  # Q_online(s')
+        best_actions = q_next_online.argmax(dim=1, keepdim=True)
+
+        # 2) Target network evaluates those actions
+        q_next_target = self.target_model(next_states).detach()
+        selected_target_q = q_next_target.gather(1, best_actions)
+
+        # 3) Build Double DQN target
+        y_j = rewards + self.gamma * (1 - dones) * selected_target_q
 
         # Compute loss and optimize
         loss = loss_fn(y_j, q_pred_action)

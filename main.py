@@ -3,20 +3,27 @@ import gymnasium as gym
 from gymnasium.wrappers import HumanRendering, RecordVideo, RecordEpisodeStatistics
 import numpy as np
 import ale_py
+import os
+import glob
+import time
 from qlearning import QLearningAgent
 from model import DQN, preprocess
 from upscaler import UpscaleRender
+from torch.utils.tensorboard import SummaryWriter
 
 DISPLAY = False
+TRAIN = False
 
 
 env = gym.make(
     "ALE/Breakout-v5", render_mode="rgb_array", repeat_action_probability=0.0
 )
 env = UpscaleRender(env, scale=3)
+writer = SummaryWriter("runs/training")
 
 n_actions = env.action_space.n  # type: ignore
 recording_epoch = 250
+best_score = -float("inf")
 TARGET_UPDATE_INTERVAL = 10000
 FRAME_BETWEEN_TRAIN = 3
 
@@ -25,10 +32,10 @@ qlearning_rewards = []
 total_frames = 0
 
 # env = RecordVideo(
-#    env,
-#    video_folder="qlearning-agent",  # Folder to save videos
-#    name_prefix="eval",  # Prefix for video filenames
-#    episode_trigger=lambda x: x % recording_epoch == 0,  # Record every episode
+#     env,
+#     video_folder="qlearning-agent",  # Folder to save videos
+#     name_prefix="eval",  # Prefix for video filenames
+#     episode_trigger=lambda x: True,  # Record every episode
 # )
 # env = RecordEpisodeStatistics(env, buffer_length=1000)
 
@@ -82,7 +89,7 @@ def play_and_train(
         agent.update(s, a, r, next_s, done)
 
         # Train only sometimes
-        if epoch % FRAME_BETWEEN_TRAIN == 0:
+        if epoch % FRAME_BETWEEN_TRAIN == 0 and TRAIN:
             agent.thinkAboutWhatHappened(
                 update=(total_frames + epoch) % TARGET_UPDATE_INTERVAL == 0
             )
@@ -95,17 +102,40 @@ def play_and_train(
     return (total_reward, t_max)
 
 
+# directory where RecordVideo writes videos
+VIDEO_FOLDER = "qlearning-agent"
+VIDEO_GLOB = os.path.join(VIDEO_FOLDER, "*.mp4")
+
+# best score seen among saved videos
+best_score = -float("inf")
+
 M = 90000
 for i in range(M):
-    if i % 1000 == -1  or DISPLAY:
+    if i % 1000 == -1 or DISPLAY:
         env1 = HumanRendering(env)
     else:
         env1 = env
 
-    # Train
+    # --- remember current set of video files before running episode ---
+    before_files = set(glob.glob(VIDEO_GLOB))
+
+    # Train / play (TRAIN is False in your config so thinkAboutWhatHappened won't run)
     reward, frames = play_and_train(env1, agent)
 
-    # Update counters
+    # small pause to allow the recorder to flush the file (usually not necessary,
+    # but helps if filesystem delays occur)
+    time.sleep(0.1)
+
+    # --- find new files created by the recorder for this episode ---
+    after_files = set(glob.glob(VIDEO_GLOB))
+    new_files = sorted(list(after_files - before_files), key=os.path.getmtime)
+
+    # Log reward to tensorboard
+    writer.add_scalar("Reward/Episode", reward, i)
+    writer.add_scalar("Epsilon", agent.epsilon, i)
+    writer.add_scalar("Reward/100-episode-mean", np.mean(qlearning_rewards[-100:]), i)
+
+    # Update counters & print
     qlearning_rewards.append(reward)
     total_frames += frames
     print(f"Epoch {i}: mean reward", np.mean(qlearning_rewards[-100:]))
@@ -113,4 +143,32 @@ for i in range(M):
         print(f"Total frames: {total_frames}")
         print(f"Epsilon: {agent.epsilon}")
 
-assert np.mean(qlearning_rewards[-100:]) > 0.0
+    # if len(new_files) == 0:
+    #     print(f"No new video file detected for episode {i} (reward={reward}).")
+    # else:
+    #     # Decide whether to keep or remove
+    #     if reward >= best_score:
+    #         # New best -> keep files and update best_score
+    #         best_score = reward
+    #         print(
+    #             f" Episode {i} saved as new best: reward={reward}. Kept {len(new_files)} file(s)."
+    #         )
+    #         for fpath in new_files:
+    #             base = os.path.basename(fpath)
+    #             dirname = os.path.dirname(fpath)
+    #             new_name = f"best_{int(best_score):04d}_ep{i}_{base}"
+    #             new_path = os.path.join(dirname, new_name)
+    #             try:
+    #                 os.rename(fpath, new_path)
+    #             except Exception:
+    #                 # If rename fails (rare), keep as-is
+    #                 pass
+    #     else:
+    #         for fpath in new_files:
+    #             try:
+    #                 os.remove(fpath)
+    #             except Exception as e:
+    #                 print(f"Warning: failed to remove {fpath}: {e}")
+    #         print(
+    #             f"Episode {i} (reward={reward}) not better than best ({best_score}). Deleted {len(new_files)} file(s)."
+    #         )

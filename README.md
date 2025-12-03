@@ -2,4 +2,7 @@
 
 This, project, although the name of the repo is Pong, is focused on developing an AI agent that can play the classic Atari game Breakout using reinforcement learning techniques. The agent is trained using Deep Q-Learning to learn optimal strategies for maximizing its score in the game.
 
-the project can be executed by running the main.py file.
+The project can be executed by running the main.py file.
+
+Link of the video: 
+[![Watch the video](https://i.sstatic.net/Vp2cE.png)](https://drive.google.com/file/d/1K3dD1GkpMwWkm4ET8TES6Qsd9PKrr6fI/view?usp=sharing)
